@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'nix_button_size.dart';
 import 'nix_button_state.dart';
@@ -10,9 +9,10 @@ import 'nix_button_style.dart';
 /// Features a stadium-shaped (100% rounded) button designed to hold an icon,
 /// with an optional text label positioned directly underneath.
 ///
-/// Utilizes Riverpod for high performance by scoping interactive state (hover,
-/// press, focus) updates so they do not rebuild parent widgets.
-class NixButton extends ConsumerStatefulWidget {
+/// Optimized using a local [ValueNotifier] and [ValueListenableBuilder] so that
+/// interaction state (hover, press, focus) updates only rebuild the button container,
+/// leaving parent widgets and the label tree untouched.
+class NixButton extends StatefulWidget {
   /// Callback when the button is pressed. If null, the button is disabled.
   final VoidCallback? onPressed;
 
@@ -100,34 +100,36 @@ class NixButton extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<NixButton> createState() => _NixButtonState();
+  State<NixButton> createState() => _NixButtonState();
 }
 
-class _NixButtonState extends ConsumerState<NixButton> {
-  late final String _buttonId;
+class _NixButtonState extends State<NixButton> {
+  late final ValueNotifier<NixButtonState> _stateNotifier;
 
   @override
   void initState() {
     super.initState();
-    // Unique ID to scope interaction states in Riverpod
-    _buttonId =
-        'nix_button_${DateTime.now().microsecondsSinceEpoch}_${identityHashCode(this)}';
+    _stateNotifier = ValueNotifier(const NixButtonState());
+  }
+
+  @override
+  void dispose() {
+    _stateNotifier.dispose();
+    super.dispose();
   }
 
   bool get _isEnabled => widget.enabled && widget.onPressed != null;
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(nixButtonStateProvider(_buttonId));
     final double height = widget.size.height;
     final double width = widget.size.width;
 
-    // Resolve dynamic colors based on theme and states
-    final Color backgroundColor = _resolveBackgroundColor(context, state);
-    final Color foregroundColor = _resolveForegroundColor(context, state);
-    final Border? border = _resolveBorder(context, state);
+    // Resolve static foreground and border colors (these do not change on hover/press/focus)
+    final Color foregroundColor = _resolveForegroundColor(context);
+    final Border? border = _resolveBorder(context);
 
-    // Build the icon inside the button
+    // Build the icon inside the button once (static child)
     final Widget iconWithTheme = IconTheme.merge(
       data: IconThemeData(
         color: foregroundColor,
@@ -139,82 +141,105 @@ class _NixButtonState extends ConsumerState<NixButton> {
     // Configure animation duration
     final duration = widget.enableAnimations ? widget.animationDuration : Duration.zero;
 
-    // Define shadows
-    final List<BoxShadow>? shadows = widget.showShadow
-        ? [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: state.isHovered ? 8.0 : 4.0,
-              offset: state.isHovered ? const Offset(0, 4.0) : const Offset(0, 2.0),
-            )
-          ]
-        : null;
+    // Build the interactive button container using ValueNotifier to scope rebuilds
+    Widget buttonContainer = ValueListenableBuilder<NixButtonState>(
+      valueListenable: _stateNotifier,
+      child: iconWithTheme,
+      builder: (context, state, child) {
+        // Resolve dynamic background color based on active state
+        final Color backgroundColor = _resolveBackgroundColor(context, state);
 
-    final List<BoxShadow> focusRing = state.isFocused
-        ? [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-              spreadRadius: 3.0,
-              blurRadius: 3.0,
-            )
-          ]
-        : [];
+        // Define shadows
+        final List<BoxShadow>? shadows = widget.showShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: state.isHovered ? 8.0 : 4.0,
+                  offset: state.isHovered ? const Offset(0, 4.0) : const Offset(0, 2.0),
+                )
+              ]
+            : null;
 
-    final List<BoxShadow>? combinedShadows =
-        (shadows == null && focusRing.isEmpty)
-            ? null
-            : [...(shadows ?? []), ...focusRing];
+        final List<BoxShadow> focusRing = state.isFocused
+            ? [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                  spreadRadius: 3.0,
+                  blurRadius: 3.0,
+                )
+              ]
+            : [];
 
-    // Main button container
-    Widget buttonContainer = AnimatedContainer(
-      duration: duration,
-      curve: widget.animationCurve,
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(height / 2),
-        border: border,
-        boxShadow: combinedShadows,
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: _isEnabled ? widget.onPressed : null,
-          onHover: _isEnabled
-              ? (hovered) => ref
-                  .read(nixButtonStateProvider(_buttonId).notifier)
-                  .update((s) => s.copyWith(isHovered: hovered))
-              : null,
-          onFocusChange: _isEnabled
-              ? (focused) => ref
-                  .read(nixButtonStateProvider(_buttonId).notifier)
-                  .update((s) => s.copyWith(isFocused: focused))
-              : null,
-          onTapDown: _isEnabled
-              ? (_) => ref
-                  .read(nixButtonStateProvider(_buttonId).notifier)
-                  .update((s) => s.copyWith(isPressed: true))
-              : null,
-          onTapUp: _isEnabled
-              ? (_) => ref
-                  .read(nixButtonStateProvider(_buttonId).notifier)
-                  .update((s) => s.copyWith(isPressed: false))
-              : null,
-          onTapCancel: _isEnabled
-              ? () => ref
-                  .read(nixButtonStateProvider(_buttonId).notifier)
-                  .update((s) => s.copyWith(isPressed: false))
-              : null,
-          focusNode: widget.focusNode,
-          autofocus: widget.autofocus,
-          mouseCursor: _isEnabled ? widget.mouseCursor : SystemMouseCursors.basic,
-          borderRadius: BorderRadius.circular(height / 2),
-          child: Center(
-            child: iconWithTheme,
+        final List<BoxShadow>? combinedShadows =
+            (shadows == null && focusRing.isEmpty)
+                ? null
+                : [...(shadows ?? []), ...focusRing];
+
+        Widget container = AnimatedContainer(
+          duration: duration,
+          curve: widget.animationCurve,
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(height / 2),
+            border: border,
+            boxShadow: combinedShadows,
           ),
-        ),
-      ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: _isEnabled ? widget.onPressed : null,
+              onHover: _isEnabled
+                  ? (hovered) => _stateNotifier.value =
+                      _stateNotifier.value.copyWith(isHovered: hovered)
+                  : null,
+              onFocusChange: _isEnabled
+                  ? (focused) => _stateNotifier.value =
+                      _stateNotifier.value.copyWith(isFocused: focused)
+                  : null,
+              onTapDown: _isEnabled
+                  ? (_) => _stateNotifier.value =
+                      _stateNotifier.value.copyWith(isPressed: true)
+                  : null,
+              onTapUp: _isEnabled
+                  ? (_) => _stateNotifier.value =
+                      _stateNotifier.value.copyWith(isPressed: false)
+                  : null,
+              onTapCancel: _isEnabled
+                  ? () => _stateNotifier.value =
+                      _stateNotifier.value.copyWith(isPressed: false)
+                  : null,
+              focusNode: widget.focusNode,
+              autofocus: widget.autofocus,
+              mouseCursor: _isEnabled ? widget.mouseCursor : SystemMouseCursors.basic,
+              borderRadius: BorderRadius.circular(height / 2),
+              child: Center(
+                child: child,
+              ),
+            ),
+          ),
+        );
+
+        // Apply scale animation if enabled
+        if (widget.enableAnimations && _isEnabled) {
+          double scale = 1.0;
+          if (state.isPressed) {
+            scale = widget.pressScale;
+          } else if (state.isHovered) {
+            scale = widget.hoverScale;
+          }
+
+          container = AnimatedScale(
+            scale: scale,
+            duration: widget.animationDuration,
+            curve: widget.animationCurve,
+            child: container,
+          );
+        }
+
+        return container;
+      },
     );
 
     // Combine button and label into a single layout
@@ -277,23 +302,6 @@ class _NixButtonState extends ConsumerState<NixButton> {
       mainWidget = buttonContainer;
     }
 
-    // Apply scale animation if enabled
-    if (widget.enableAnimations && _isEnabled) {
-      double scale = 1.0;
-      if (state.isPressed) {
-        scale = widget.pressScale;
-      } else if (state.isHovered) {
-        scale = widget.hoverScale;
-      }
-
-      mainWidget = AnimatedScale(
-        scale: scale,
-        duration: widget.animationDuration,
-        curve: widget.animationCurve,
-        child: mainWidget,
-      );
-    }
-
     // Apply tooltip if provided
     if (widget.tooltip != null) {
       mainWidget = Tooltip(
@@ -353,8 +361,8 @@ class _NixButtonState extends ConsumerState<NixButton> {
     return baseColor;
   }
 
-  // Resolve dynamic foreground color (icon/label) based on style, theme, and state
-  Color _resolveForegroundColor(BuildContext context, NixButtonState state) {
+  // Resolve dynamic foreground color (icon/label) based on style, theme
+  Color _resolveForegroundColor(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -381,7 +389,7 @@ class _NixButtonState extends ConsumerState<NixButton> {
   }
 
   // Resolve borders for outlined style
-  Border? _resolveBorder(BuildContext context, NixButtonState state) {
+  Border? _resolveBorder(BuildContext context) {
     if (widget.style != NixButtonStyle.outlined) return null;
 
     final theme = Theme.of(context);

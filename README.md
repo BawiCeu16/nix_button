@@ -8,7 +8,7 @@ A custom, premium, and theme-dynamic button widget for Flutter designed for perf
 - **Label Underneath**: An optional label (e.g. Text) positioned directly underneath the button container, automatically styled with normal weight.
 - **Overflow Prevention**: The label automatically handles layout overflows using size-constrained boundaries with ellipsis truncation.
 - **Dynamic Theming**: Automatically resolves dynamic colors (background, foreground, outlines) based on the active `ThemeData` and dark/light modes.
-- **Riverpod State Management**: High-performance rendering powered by a scoped Riverpod interactive state provider (`nixButtonStateProvider`). Hover, focus, and press updates rebuild only the button's internal parts, leaving the parent widget tree untouched.
+- **Optimized Rebuild Scope**: High-performance rendering powered by a localized `ValueNotifier` and `ValueListenableBuilder`. Hover, focus, and press updates only rebuild the button container itself, leaving the icon, label, and parent widget trees completely untouched.
 - **Configurable Animations & Shadows**: Scale/color transitions and elevation shadows are disabled by default for absolute simplicity and maximum rendering speed, but can easily be enabled.
 
 ## Sizing Specs
@@ -23,19 +23,14 @@ NixButton supports three default sizes:
 
 ## Usage
 
-Ensure your app is wrapped inside a Riverpod `ProviderScope` to enable performance optimizations:
+Simply declare and use `NixButton` in your widget tree:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nix_button/nix_button.dart';
 
 void main() {
-  runApp(
-    const ProviderScope(
-      child: MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

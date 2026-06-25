@@ -1,5 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 /// Represents the interaction states of a single [NixButton].
 class NixButtonState {
   /// Whether the button is currently hovered.
@@ -43,29 +41,3 @@ class NixButtonState {
   @override
   int get hashCode => Object.hash(isHovered, isPressed, isFocused);
 }
-
-/// A notifier that manages the interactive state of a NixButton.
-class NixButtonStateNotifier extends Notifier<NixButtonState> {
-  /// The unique identifier of the button instance.
-  final String buttonId;
-
-  NixButtonStateNotifier(this.buttonId);
-
-  @override
-  NixButtonState build() {
-    return const NixButtonState();
-  }
-
-  /// Updates the interactive state of the button.
-  void update(NixButtonState Function(NixButtonState) updateFn) {
-    state = updateFn(state);
-  }
-}
-
-/// A family provider that supplies interactive states for individual [NixButton] instances.
-///
-/// Automatically disposes the state when the button is unmounted and no longer watched.
-final nixButtonStateProvider =
-    NotifierProvider.autoDispose.family<NixButtonStateNotifier, NixButtonState, String>(
-  (arg) => NixButtonStateNotifier(arg),
-);

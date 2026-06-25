@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:nix_button/nix_button.dart';
 
 void main() {
   Widget buildTestableWidget(Widget child) {
-    return ProviderScope(
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(child: child),
-        ),
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(child: child),
       ),
     );
   }

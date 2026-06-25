@@ -38,8 +38,6 @@ dependencies:
   nix_button:
     path: ..
 
-  flutter_riverpod: ^3.3.2
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
